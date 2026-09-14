@@ -269,12 +269,19 @@ rather than maintained as an independent source of truth.
 
 ## 6. Technology Architecture
 
+The application is a single Next.js project. There is no separately
+hosted backend service — server-side logic lives in the same codebase
+as Route Handlers and Server Actions, and the browser calls it directly
+using shared TypeScript types rather than a separately versioned API
+client.
+
 ### 6.1 Frontend
 
--   Next.js
+-   Next.js (App Router)
 -   TypeScript
 -   React
--   REST/OpenAPI client generated or typed from FastAPI where practical
+-   Server Actions / Route Handlers, called directly using shared
+    TypeScript types (no separate client generation step)
 
 Responsibilities:
 
@@ -288,20 +295,30 @@ Responsibilities:
 -   Plaid Link integration
 -   Bank connection status and sync UI
 
-### 6.2 Backend
+### 6.2 Server-side logic
 
--   FastAPI
--   Python
--   SQLAlchemy 2.0
--   Alembic
+-   Next.js Route Handlers and Server Actions
+-   TypeScript
+-   Drizzle ORM
+-   drizzle-kit (migrations)
+-   Zod (request/response validation)
 -   PostgreSQL
 
-Suggested domain organization:
+Suggested domain organization (within the same Next.js project):
 
 ``` text
-backend/
-├── app/
-│   ├── api/
+app/
+├── api/
+│   ├── households/
+│   ├── accounts/
+│   ├── transactions/
+│   ├── budgets/
+│   ├── ledger/
+│   ├── dashboard/
+│   └── banking/
+│       └── plaid/
+lib/
+├── server/
 │   ├── auth/
 │   ├── households/
 │   ├── users/
@@ -312,10 +329,10 @@ backend/
 │   ├── ledger/
 │   ├── dashboard/
 │   ├── banking/
-│   ├── integrations/
 │   │   └── plaid/
-│   └── common/
-└── tests/
+│   └── db/
+└── validation/
+tests/
 ```
 
 ### 6.3 Architectural principle
@@ -339,11 +356,12 @@ This allows the application to:
 
 ## 7. Database Design
 
-Use PostgreSQL with SQLAlchemy 2.0 and Alembic.
+Use PostgreSQL with Drizzle ORM and drizzle-kit for migrations.
 
-Financial amounts should use integer minor units (for example, cents) or
-PostgreSQL `NUMERIC`/Python `Decimal`. Do not use floating-point values
-for financial calculations.
+Financial amounts should use integer minor units (for example, cents)
+stored as a `bigint`/`integer` column, or PostgreSQL `NUMERIC` with a
+fixed scale. Do not use JavaScript's native `number` type (floating
+point) for financial calculations.
 
 ### 7.1 Users
 
@@ -481,11 +499,11 @@ Plaid should be used as the initial bank connectivity provider.
 The flow is:
 
 ``` text
-Next.js
+Next.js (client)
    │
    │ request link token
    ▼
-FastAPI
+Next.js Route Handler
    │
    │ create Link token with Plaid
    ▼
@@ -497,11 +515,11 @@ User selects/authenticates bank
    │
    │ public_token
    ▼
-Next.js
+Next.js (client)
    │
-   │ send public_token to backend
+   │ send public_token to server
    ▼
-FastAPI
+Next.js Route Handler
    │
    │ exchange public_token
    ▼
@@ -509,7 +527,7 @@ Plaid
    │
    │ access_token + item_id
    ▼
-FastAPI
+Next.js Route Handler
    │
    ├── fetch accounts
    ├── sync transactions
@@ -524,15 +542,16 @@ token.
 ### 9.2 Plaid connection flow
 
 1.  User clicks **Connect Bank**.
-2.  Next.js asks FastAPI for a Plaid Link token.
-3.  FastAPI creates the Link token with Plaid.
-4.  Next.js opens Plaid Link.
+2.  The client calls a Next.js Route Handler for a Plaid Link token.
+3.  The Route Handler creates the Link token with Plaid.
+4.  Next.js opens Plaid Link in the browser.
 5.  User selects and authenticates with their financial institution.
 6.  Plaid returns a temporary `public_token`.
-7.  Next.js sends the `public_token` to FastAPI.
-8.  FastAPI exchanges it with Plaid for an `access_token` and `item_id`.
-9.  FastAPI stores the provider credentials securely.
-10. FastAPI retrieves the connected accounts.
+7.  The client sends the `public_token` to a Next.js Route Handler.
+8.  The Route Handler exchanges it with Plaid for an `access_token` and
+    `item_id`.
+9.  The server stores the provider credentials securely.
+10. The server retrieves the connected accounts.
 11. Application creates/maps `accounts` and `bank_accounts`.
 12. Initial transaction synchronization runs.
 13. Imported transactions flow through the normal categorization and
@@ -1402,7 +1421,10 @@ errors.
 ## 23. Testing Strategy
 
 Financial calculations should receive especially strong unit and
-integration test coverage.
+integration test coverage. Vitest is a good fit for this project —
+unit tests for pure calculation functions (splits, budgets, ledger),
+and integration tests that exercise Route Handlers against a real
+Postgres instance (a fresh container in CI, per §25).
 
 ### 23.1 Core financial tests
 
@@ -1498,17 +1520,13 @@ Last synced: 5 minutes ago
 Recommended initial architecture:
 
 ``` text
-Next.js
+Next.js (app + Route Handlers)
    ↓
-Vercel / frontend host
-
-FastAPI
-   ↓
-Container host
+Vercel
 
 PostgreSQL
    ↓
-Managed database
+Managed database (Neon)
 
 Plaid
    ↓
@@ -1522,14 +1540,23 @@ Background jobs should be available for:
 -   Retryable provider work
 -   Future recurring transactions
 
+On Vercel, these run as scheduled Route Handlers (Vercel Cron) invoked
+on an interval, plus a webhook Route Handler for provider-triggered
+syncs. If sync volume or duration ever outgrows serverless function
+limits, this is the one piece that may warrant pulling out into a
+separate long-running worker — everything else in this architecture is
+built to make that extraction possible without changing the domain
+model.
+
 The application should not depend on the user's browser remaining open
 for a bank sync to complete.
 
 ------------------------------------------------------------------------
 
-## 26. Suggested Backend Service Boundaries
+## 26. Suggested Service Boundaries
 
-The backend can be organized around domain services:
+Server-side logic (`lib/server/`) can be organized around domain
+services:
 
 ``` text
 TransactionService
@@ -1576,24 +1603,35 @@ the budgeting application.
 
 ## 27. Recommended Repository Structure
 
+A single Next.js project, rather than separate frontend/backend
+projects:
+
 ``` text
 project/
-├── frontend/
-│   ├── app/
-│   ├── components/
-│   ├── features/
+├── app/
+│   ├── (marketing)/
+│   ├── (app)/
 │   │   ├── dashboard/
 │   │   ├── transactions/
 │   │   ├── budgets/
 │   │   ├── ledger/
-│   │   ├── accounts/
-│   │   └── banking/
-│   ├── lib/
-│   └── types/
+│   │   └── accounts/
+│   └── api/
+│       ├── households/
+│       ├── accounts/
+│       ├── transactions/
+│       ├── budgets/
+│       ├── ledger/
+│       ├── dashboard/
+│       ├── banking/
+│       │   └── plaid/
+│       └── webhooks/
+│           └── plaid/
 │
-├── backend/
-│   ├── app/
-│   │   ├── api/
+├── components/
+│
+├── lib/
+│   ├── server/
 │   │   ├── auth/
 │   │   ├── households/
 │   │   ├── users/
@@ -1604,11 +1642,15 @@ project/
 │   │   ├── ledger/
 │   │   ├── dashboard/
 │   │   ├── banking/
-│   │   ├── integrations/
 │   │   │   └── plaid/
-│   │   ├── db/
-│   │   └── common/
-│   └── tests/
+│   │   └── db/
+│   ├── validation/
+│   └── types/
+│
+├── drizzle/
+│   └── migrations/
+│
+├── tests/
 │
 └── docs/
     └── design.md
@@ -1620,11 +1662,10 @@ project/
 
 ### Phase 1 --- Foundation
 
--   Set up Next.js/TypeScript.
--   Set up FastAPI/Python.
--   Set up PostgreSQL.
--   Add SQLAlchemy 2.0.
--   Add Alembic.
+-   Set up Next.js/TypeScript (App Router).
+-   Set up PostgreSQL (Neon).
+-   Add Drizzle ORM.
+-   Add drizzle-kit migrations.
 -   Implement authentication.
 -   Implement household creation/invitation.
 -   Establish household authorization.
@@ -1783,27 +1824,21 @@ transaction-derived ledger history intact.
 The final system should look like:
 
 ``` text
-                         ┌──────────────────┐
-                         │     Next.js      │
-                         │   Web Frontend   │
-                         └────────┬─────────┘
-                                  │
-                         REST / OpenAPI
-                                  │
-                         ┌────────▼─────────┐
-                         │     FastAPI      │
-                         │  Domain Services │
-                         └────────┬─────────┘
-                                  │
-                ┌─────────────────┼─────────────────┐
-                │                 │                 │
-        ┌───────▼───────┐ ┌──────▼──────┐ ┌───────▼───────┐
-        │ PostgreSQL    │ │ Background   │ │    Plaid      │
-        │               │ │ Jobs / Sync  │ │ Bank Layer    │
-        └───────────────┘ └─────────────┘ └───────┬───────┘
-                                                  │
-                                            Bank Accounts
-                                            & Transactions
+                         ┌──────────────────────────┐
+                         │         Next.js          │
+                         │  UI + Route Handlers /   │
+                         │      Server Actions       │
+                         └────────────┬─────────────┘
+                                      │
+                ┌─────────────────────┼─────────────────────┐
+                │                     │                     │
+        ┌───────▼───────┐     ┌──────▼──────┐       ┌───────▼───────┐
+        │ PostgreSQL    │     │ Scheduled /  │       │    Plaid      │
+        │ (Drizzle ORM) │     │ Webhook Sync │       │ Bank Layer    │
+        └───────────────┘     └─────────────┘       └───────┬───────┘
+                                                              │
+                                                        Bank Accounts
+                                                        & Transactions
 
 Plaid
   ↓

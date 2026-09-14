@@ -1,0 +1,15 @@
+import { clerkMiddleware } from "@clerk/nextjs/server";
+
+const clerkProxy = clerkMiddleware();
+
+export function proxy(...args: Parameters<typeof clerkProxy>) {
+  return clerkProxy(...args);
+}
+
+export const config = {
+  matcher: [
+    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
+    "/__clerk/:path*",
+    "/(api|trpc)(.*)",
+  ],
+};
