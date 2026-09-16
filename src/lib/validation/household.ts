@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const emailSchema = z.string().trim().email("Enter a valid email address.");
+const emailSchema = z.email("Enter a valid email address.");
 
 const userNameSchema = z
   .string()

@@ -130,7 +130,7 @@ export default async function HomePage() {
         <div className="ribbon-cell">
           <div className="label"><span className="dot" style={{ background: "var(--teal)" }} />The ledger</div>
           <div className="title">Always know the balance</div>
-          <div className="desc">Every shared expense is split automatically, down to the cent, so the running "who owes whom" is never a guess.</div>
+          <div className="desc">Every shared expense is split automatically, down to the cent, so the running total of &quot;who owes whom&quot; is never a guess.</div>
         </div>
         <div className="ribbon-cell">
           <div className="label"><span className="dot" style={{ background: "var(--green)" }} />Connected accounts</div>
