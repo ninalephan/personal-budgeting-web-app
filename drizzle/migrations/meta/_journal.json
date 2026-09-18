@@ -15,6 +15,34 @@
       "when": 1789405903205,
       "tag": "0001_dry_mathemanic",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789674026398,
+      "tag": "0002_serious_jubilee",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789674847536,
+      "tag": "0003_seed_default_categories",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1789676679415,
+      "tag": "0004_broken_george_stacy",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1789688391620,
+      "tag": "0005_bright_morg",
+      "breakpoints": true
     }
   ]
 }
