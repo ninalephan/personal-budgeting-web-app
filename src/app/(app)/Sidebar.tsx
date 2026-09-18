@@ -7,13 +7,13 @@ import { LayoutDashboard, Users, ArrowLeftRight, PiggyBank, Scale } from "lucide
 const NAV_ITEMS = [
   { href: "/households", label: "Household", icon: Users },
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/budgets", label: "Budgets", icon: PiggyBank },
 ];
 
 // Rounds out the rail to match the design, ahead of those sections
 // actually being built.
 const COMING_SOON_ITEMS = [
   { label: "Transactions", icon: ArrowLeftRight },
-  { label: "Budgets", icon: PiggyBank },
   { label: "Ledger", icon: Scale },
 ];
 
